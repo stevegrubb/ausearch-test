@@ -16,7 +16,7 @@ types=`ausearch -m 2>&1 | tr ' ' '\n'| egrep [A-Z] | egrep -v 'ALL|Argument|Vali
 #echo -e "$types\n\n"
 for t in $types
 do
-	ausearch -if $INLOG -m $t --just-one --raw 2>/dev/null 1>&2
+	ausearch -if "$INLOG" -m $t --just-one --raw 2>/dev/null 1>&2
 	if [ $? -ne 0 ] ; then
 		echo "Missing $t"
 	fi

@@ -1,8 +1,8 @@
 /*
  * ausearch-test.c - ausearch testing utility
- * version: 0.6
+ * version: 0.7
  * Intended audit version >= 2.8
- * Copyright 2014,2017 Red Hat Inc., Durham, North Carolina.
+ * Copyright 2014,2017 Red Hat Inc.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -191,7 +191,11 @@ int do_auparse_record_test(auparse_state_t *master_au)
 					field, val);
 			printf("Full record being tested: %s\n",
 			auparse_get_record_text(master_au));
-			return 2;
+			if (!continue_on_error) {
+				auparse_destroy(tmp_au);
+				exit(2);
+			} else
+				return 2;
 		}
 	} while (auparse_next_field(master_au));
 	auparse_destroy(tmp_au);
@@ -203,13 +207,14 @@ int do_auparse_record_test(auparse_state_t *master_au)
  */
 int do_ausearch_record_test(auparse_state_t *au)
 {
-	char cmd[8192], *ptr;
+	char cmd1[8192], cmd2[4096], *ptr, *ptr2, *ptr3;
 	int hn = 0, li = 0, ses = 0, first = 0;
 	auparse_first_field(au);
-	ptr = cmd;
+	ptr = cmd1;
 	ptr = stpcpy(ptr, AUSEARCH);
 	ptr = stpcpy(ptr, " -if ");
 	ptr = stpcpy(ptr, LOG);
+	ptr2 = stpcpy(cmd2, cmd1);
 
 	do {
 		char *line;
@@ -220,13 +225,15 @@ int do_ausearch_record_test(auparse_state_t *au)
 			snprintf(buf, sizeof(buf), "%lu", serial);
 			ptr = stpcpy(ptr, " -a ");
 			ptr = stpcpy(ptr, buf);
-			asprintf(&line, "%s  >/dev/null 2>&1", cmd);
-			if (run_ausearch(au, line, "-a", buf, cmd)) {
+			asprintf(&line, "%s  >/dev/null 2>&1", cmd1);
+			if (run_ausearch(au, line, "-a", buf, cmd1)) {
 				free(line);
 				return 1;
 			}
 			free(line);
 			first = 1;
+			ptr2 = stpcpy(ptr2, " -a ");
+			ptr2 = stpcpy(ptr2, buf);
 		}
 		const char *field = auparse_get_field_name(au);
 		if (field) {
@@ -291,13 +298,17 @@ int do_ausearch_record_test(auparse_state_t *au)
 						// skip netlink - not a real
 						// address
 							continue;
-					}
+					} else if (type == AUDIT_NETFILTER_PKT)
+							continue;
 				}
 				if (strcmp(field, "name") == 0) {
 					if (strcmp(val, "(null)") == 0)
 					// Some files temporarily have
 					// no name - skip them
 						continue;
+					// Kernel module uses name for module
+					//if (type == AUDIT_KERN_MODULE)
+					//	continue;
 				}
 				if (type == AUDIT_USER_AVC)
 					// USER AVCs are a mess - skip
@@ -345,12 +356,26 @@ int do_ausearch_record_test(auparse_state_t *au)
 					val = buf;
 				}
 
+				// Do single command
+				ptr3 = ptr2;
+				ptr3 = stpcpy(ptr3, " ");
+				ptr3 = stpcpy(ptr3, opt);
+				ptr3 = stpcpy(ptr3, " ");
+				ptr3 = stpcpy(ptr3, val);
+				asprintf(&line, "%s  >/dev/null 2>&1", cmd2);
+				if (run_ausearch(au, line, opt, val, cmd2)) {
+					free(line);
+					return 1;
+				}
+				free(line);
+
+				// Do cumulative command
 				ptr = stpcpy(ptr, " ");
 				ptr = stpcpy(ptr, opt);
 				ptr = stpcpy(ptr, " ");
 				ptr = stpcpy(ptr, val);
-				asprintf(&line, "%s  >/dev/null 2>&1", cmd);
-				if (run_ausearch(au, line, opt, val, cmd)) {
+				asprintf(&line, "%s  >/dev/null 2>&1", cmd1);
+				if (run_ausearch(au, line, opt, val, cmd1)) {
 					free(line);
 					return 1;
 				}
