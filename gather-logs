@@ -1,0 +1,24 @@
+#!/bin/sh
+types=`ausearch -m 2>&1 | tr ' ' '\n'| egrep [A-Z] | egrep -v 'ALL|Argument|Valid|EOE|TRUSTED_APP|KERNEL_OTHER' | sort`
+LOG="audit.log"
+if [ -e $LOG ] ; then
+	read -p "$LOG exists. Overwrite? " -n 1 -r
+	echo
+	if [[ $REPLY =~ ^[Yy]$ ]]; then
+		rm -f $LOG
+	else
+		exit 0
+	fi
+fi
+touch $LOG
+#echo -e "$types\n\n"
+for t in $types
+do
+	ausearch --start this-year -m $t --just-one --raw 2>/dev/null >> $LOG
+	if [ $? -ne 0 ] ; then
+		echo "Can't find $t"
+	else
+		echo "Found $t"
+	fi
+done
+
